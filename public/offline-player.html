@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Offline SCORM Player</title>
+    
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        
+        .offline-banner {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: #f59e0b;
+            color: white;
+            padding: 10px;
+            text-align: center;
+            z-index: 10001;
+            display: none;
+            font-weight: bold;
+        }
+        
+        .offline-banner.show {
+            display: block;
+        }
+        
+        .online-banner {
+            background: #10b981;
+        }
+        
+        .loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #2563eb;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        
+        .loading.hidden {
+            display: none;
+        }
+        
+        .spinner {
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .sync-indicator {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 25px;
+            font-size: 12px;
+            z-index: 10000;
+            display: none;
+        }
+        
+        .sync-indicator.show {
+            display: block;
+        }
+        
+        .sync-indicator.syncing {
+            background: #3b82f6;
+        }
+        
+        .debug {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.9);
+            color: #0f0;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 11px;
+            max-width: 400px;
+            max-height: 200px;
+            overflow-y: auto;
+            border-radius: 5px;
+            z-index: 10000;
+        }
+        
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="offline-banner" id="offlineBanner">
+        📡 OFFLINE MODE - Progress will sync when connection is restored
+    </div>
+    
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <div id="status">Initializing...</div>
+    </div>
+    
+    <div class="sync-indicator" id="syncIndicator">💾 Syncing...</div>
+    
+    <div class="debug" id="debug"></div>
+    
+    <iframe id="content"></iframe>
+    
+    <script src="https://unpkg.com/scorm-again@3/dist/scorm12.min.js"></script>
+    <script src="https://unpkg.com/scorm-again@3/dist/scorm2004.min.js"></script>
+    
+    <script>
+        const debug = document.getElementById('debug');
+        const statusEl = document.getElementById('status');
+        const offlineBanner = document.getElementById('offlineBanner');
+        const syncIndicator = document.getElementById('syncIndicator');
+        
+        let isOnline = navigator.onLine;
+        let scormApi = null;
+        let sessionId = null;
+        let packageId = null;
+        let offlineQueue = [];
+        
+        function log(msg) {
+            console.log(msg);
+            const time = new Date().toLocaleTimeString();
+            debug.innerHTML += `[${time}] ${msg}<br>`;
+            debug.scrollTop = debug.scrollHeight;
+        }
+        
+        function updateStatus(msg) {
+            statusEl.textContent = msg;
+            log(msg);
+        }
+        
+        // Handle online/offline events
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+        
+        function handleOnline() {
+            isOnline = true;
+            offlineBanner.classList.add('online-banner');
+            offlineBanner.textContent = '✅ BACK ONLINE - Syncing progress...';
+            offlineBanner.classList.add('show');
+            log('🌐 Connection restored');
+            
+            // Sync offline queue
+            syncOfflineData();
+            
+            setTimeout(() => {
+                offlineBanner.classList.remove('show');
+            }, 5000);
+        }
+        
+        function handleOffline() {
+            isOnline = false;
+            offlineBanner.classList.remove('online-banner');
+            offlineBanner.textContent = '📡 OFFLINE MODE - Progress will sync when connection is restored';
+            offlineBanner.classList.add('show');
+            log('📡 Offline mode activated');
+        }
+        
+        // Show offline banner if already offline
+        if (!isOnline) {
+            offlineBanner.classList.add('show');
+        }
+        
+        // Initialize SCORM APIs with offline support
+        function createScormAPI(version) {
+            const settings = {
+                autocommit: true,
+                autocommitSeconds: 10,
+                logLevel: 1,
+                lmsCommitUrl: isOnline ? `/api/scorm/${packageId}/commit` : null,
+                
+                requestHandler: (commitObject) => {
+                    log('📦 Commit requested');
+                    
+                    // If offline, queue the commit
+                    if (!isOnline) {
+                        queueOfflineAction('commit', commitObject);
+                        return { sessionId, data: commitObject };
+                    }
+                    
+                    return {
+                        sessionId,
+                        data: commitObject
+                    };
+                },
+                
+                responseHandler: async (response) => {
+                    try {
+                        const data = await response.json();
+                        log('✅ Server confirmed commit');
+                        return { result: true, errorCode: 0 };
+                    } catch (e) {
+                        log('⚠️ Using offline mode for commit');
+                        return { result: true, errorCode: 0 };
+                    }
+                }
+            };
+            
+            if (version === '1.2') {
+                const api = new Scorm12API(settings);
+                window.API = api;
+                
+                // Hook into SCORM events
+                api.on('LMSInitialize', () => {
+                    log('🎯 LMSInitialize() called');
+                    saveToLocalStorage();
+                });
+                
+                api.on('LMSSetValue.*', (element, value) => {
+                    log(`📝 ${element} = ${value}`);
+                    saveToLocalStorage();
+                });
+                
+                api.on('LMSCommit', () => {
+                    log('💾 LMSCommit() called');
+                    saveToLocalStorage();
+                    if (!isOnline) {
+                        queueOfflineAction('commit', api.renderCommitObject());
+                    }
+                });
+                
+                api.on('LMSFinish', () => {
+                    log('🏁 LMSFinish() called');
+                    saveToLocalStorage();
+                    if (!isOnline) {
+                        queueOfflineAction('terminate', api.renderCommitObject());
+                    }
+                });
+                
+                return api;
+            } else {
+                const api = new Scorm2004API(settings);
+                window.API_1484_11 = api;
+                
+                // Hook into SCORM events
+                api.on('Initialize', () => {
+                    log('🎯 Initialize() called');
+                    saveToLocalStorage();
+                });
+                
+                api.on('SetValue.*', (element, value) => {
+                    log(`📝 ${element} = ${value}`);
+                    saveToLocalStorage();
+                });
+                
+                api.on('Commit', () => {
+                    log('💾 Commit() called');
+                    saveToLocalStorage();
+                    if (!isOnline) {
+                        queueOfflineAction('commit', api.renderCommitObject());
+                    }
+                });
+                
+                api.on('Terminate', () => {
+                    log('🏁 Terminate() called');
+                    saveToLocalStorage();
+                    if (!isOnline) {
+                        queueOfflineAction('terminate', api.renderCommitObject());
+                    }
+                });
+                
+                return api;
+            }
+        }
+        
+        // Queue offline action
+        function queueOfflineAction(type, data) {
+            const action = {
+                type,
+                data,
+                timestamp: Date.now()
+            };
+            
+            offlineQueue.push(action);
+            localStorage.setItem(`scorm_queue_${packageId}`, JSON.stringify(offlineQueue));
+            log(`📥 Queued ${type} action (${offlineQueue.length} pending)`);
+        }
+        
+        // Save SCORM data to localStorage
+        function saveToLocalStorage() {
+            if (!scormApi || !sessionId) return;
+            
+            try {
+                const data = scormApi.renderCommitObject();
+                localStorage.setItem(`scorm_data_${sessionId}`, JSON.stringify(data));
+                log('💾 Saved to localStorage');
+            } catch (e) {
+                log('⚠️ Failed to save locally: ' + e.message);
+            }
+        }
+        
+        // Load from localStorage
+        function loadFromLocalStorage() {
+            try {
+                const data = localStorage.getItem(`scorm_data_${sessionId}`);
+                if (data) {
+                    const parsed = JSON.parse(data);
+                    scormApi.loadFromJSON(parsed.cmi || parsed);
+                    log('📂 Loaded previous session from localStorage');
+                    return true;
+                }
+            } catch (e) {
+                log('⚠️ Could not load from localStorage');
+            }
+            return false;
+        }
+        
+        // Sync offline data to server
+        async function syncOfflineData() {
+            // Load queue from localStorage
+            const queueData = localStorage.getItem(`scorm_queue_${packageId}`);
+            if (queueData) {
+                offlineQueue = JSON.parse(queueData);
+            }
+            
+            if (offlineQueue.length === 0) {
+                log('✅ No offline data to sync');
+                return;
+            }
+            
+            log(`🔄 Syncing ${offlineQueue.length} offline actions...`);
+            syncIndicator.classList.add('show', 'syncing');
+            
+            try {
+                const response = await fetch('/api/sync/upload', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sessionId,
+                        packageId,
+                        actions: offlineQueue
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    log('✅ Offline data synced successfully');
+                    offlineQueue = [];
+                    localStorage.removeItem(`scorm_queue_${packageId}`);
+                } else {
+                    log('❌ Sync failed: ' + result.message);
+                }
+            } catch (error) {
+                log('❌ Sync error: ' + error.message);
+            } finally {
+                setTimeout(() => {
+                    syncIndicator.classList.remove('show', 'syncing');
+                }, 2000);
+            }
+        }
+        
+        // Initialize
+        async function init() {
+            try {
+                updateStatus('Fetching package...');
+                
+                // Get latest package
+                const packagesRes = await fetch('/api/packages');
+                const packagesData = await packagesRes.json();
+                
+                if (!packagesData.success || packagesData.packages.length === 0) {
+                    throw new Error('No packages found');
+                }
+                
+                const pkg = packagesData.packages[0];
+                packageId = pkg.id;
+                
+                log(`📦 Package: ${pkg.title}`);
+                log(`   SCORM ${pkg.scorm_version}`);
+                log(`   Mode: ${isOnline ? 'ONLINE' : 'OFFLINE'}`);
+                
+                updateStatus('Creating SCORM API...');
+                
+                // Create SCORM API
+                const scormVersion = pkg.scorm_version.startsWith('2004') ? '2004' : '1.2';
+                scormApi = createScormAPI(scormVersion);
+                
+                log(`✅ SCORM ${scormVersion} API ready`);
+                
+                // Initialize session
+                updateStatus('Initializing session...');
+                
+                if (isOnline) {
+                    const sessionRes = await fetch(`/api/scorm/${packageId}/initialize`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ userId: 'offline_user' })
+                    });
+                    const sessionData = await sessionRes.json();
+                    sessionId = sessionData.sessionId;
+                    log(`✅ Session: ${sessionId}`);
+                } else {
+                    sessionId = `offline_${Date.now()}`;
+                    log(`📡 Offline session: ${sessionId}`);
+                }
+                
+                // Try to load previous data
+                loadFromLocalStorage();
+                
+                // Load queue from storage
+                const queueData = localStorage.getItem(`scorm_queue_${packageId}`);
+                if (queueData) {
+                    offlineQueue = JSON.parse(queueData);
+                    log(`📥 Loaded ${offlineQueue.length} pending actions`);
+                }
+                
+                // Get launch URL
+                updateStatus('Loading content...');
+                
+                const launchRes = await fetch(`/api/packages/${packageId}/launch`);
+                const launchData = await launchRes.json();
+                
+                log(`🚀 Loading: ${launchData.launchUrl}`);
+                
+                // Load content
+                const iframe = document.getElementById('content');
+                iframe.onload = () => {
+                    log('✅ Content loaded!');
+                    document.getElementById('loading').classList.add('hidden');
+                };
+                iframe.src = launchData.launchUrl;
+                
+            } catch (error) {
+                log('❌ Error: ' + error.message);
+                updateStatus('Error: ' + error.message);
+            }
+        }
+        
+        // Auto-save periodically
+        setInterval(() => {
+            if (scormApi && sessionId) {
+                saveToLocalStorage();
+            }
+        }, 30000); // Every 30 seconds
+        
+        // Save on unload
+        window.addEventListener('beforeunload', () => {
+            if (scormApi && sessionId) {
+                saveToLocalStorage();
+            }
+        });
+        
+        // Start
+        window.addEventListener('load', init);
+        
+        log('🚀 Offline SCORM Player initialized');
+        log(`📡 Status: ${isOnline ? 'ONLINE' : 'OFFLINE'}`);
+    </script>
+</body>
+</html>

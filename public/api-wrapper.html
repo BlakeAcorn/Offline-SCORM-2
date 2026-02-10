@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SCORM API Wrapper</title>
+    
+    <!-- Load scorm-again library -->
+    <script src="https://cdn.jsdelivr.net/npm/scorm-again@latest/dist/scorm12.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/scorm-again@latest/dist/scorm2004.min.js"></script>
+    
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+        
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        
+        .api-indicator {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: #10b981;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 25px;
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            z-index: 9999;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="api-indicator" id="apiIndicator">🟢 SCORM API Ready</div>
+    <iframe id="contentFrame"></iframe>
+    
+    <script>
+        // Get URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const packageId = urlParams.get('packageId');
+        const contentPath = urlParams.get('path');
+        const version = urlParams.get('version') || '2004';
+        
+        console.log('=== SCORM API Wrapper ===');
+        console.log('Package ID:', packageId);
+        console.log('Content Path:', contentPath);
+        console.log('SCORM Version:', version);
+        
+        // Initialize both APIs immediately
+        let scormApi12 = null;
+        let scormApi2004 = null;
+        
+        // Initialize SCORM 1.2 API
+        try {
+            scormApi12 = new Scorm12API({
+                autocommit: true,
+                autocommitSeconds: 10,
+                logLevel: 1,
+                lmsCommitUrl: packageId ? `/api/scorm/${packageId}/commit` : null,
+                
+                onLogMessage: (level, message) => {
+                    console.log('[SCORM 1.2]', message);
+                },
+                
+                requestHandler: (commitObject) => {
+                    console.log('SCORM 1.2 Commit:', commitObject);
+                    return { sessionId: 'test_session', data: commitObject };
+                },
+                
+                responseHandler: async (response) => {
+                    try {
+                        const data = await response.json();
+                        return { result: true, errorCode: 0 };
+                    } catch (e) {
+                        return { result: true, errorCode: 0 };
+                    }
+                }
+            });
+            
+            window.API = scormApi12;
+            console.log('✅ SCORM 1.2 API initialized (window.API)');
+            
+            // Add event listeners
+            scormApi12.on('LMSInitialize', () => {
+                console.log('✅ LMSInitialize() called');
+                document.getElementById('apiIndicator').textContent = '🟢 SCORM 1.2 Active';
+            });
+            
+            scormApi12.on('LMSSetValue.*', (element, value) => {
+                console.log('📝 LMSSetValue:', element, '=', value);
+            });
+            
+            scormApi12.on('LMSCommit', () => {
+                console.log('💾 LMSCommit() called');
+            });
+            
+        } catch (error) {
+            console.error('Failed to initialize SCORM 1.2 API:', error);
+        }
+        
+        // Initialize SCORM 2004 API
+        try {
+            scormApi2004 = new Scorm2004API({
+                autocommit: true,
+                autocommitSeconds: 10,
+                logLevel: 1,
+                lmsCommitUrl: packageId ? `/api/scorm/${packageId}/commit` : null,
+                
+                onLogMessage: (level, message) => {
+                    console.log('[SCORM 2004]', message);
+                },
+                
+                requestHandler: (commitObject) => {
+                    console.log('SCORM 2004 Commit:', commitObject);
+                    return { sessionId: 'test_session', data: commitObject };
+                },
+                
+                responseHandler: async (response) => {
+                    try {
+                        const data = await response.json();
+                        return { result: true, errorCode: 0 };
+                    } catch (e) {
+                        return { result: true, errorCode: 0 };
+                    }
+                }
+            });
+            
+            window.API_1484_11 = scormApi2004;
+            console.log('✅ SCORM 2004 API initialized (window.API_1484_11)');
+            
+            // Add event listeners
+            scormApi2004.on('Initialize', () => {
+                console.log('✅ Initialize() called');
+                document.getElementById('apiIndicator').textContent = '🟢 SCORM 2004 Active';
+            });
+            
+            scormApi2004.on('SetValue.*', (element, value) => {
+                console.log('📝 SetValue:', element, '=', value);
+            });
+            
+            scormApi2004.on('Commit', () => {
+                console.log('💾 Commit() called');
+            });
+            
+        } catch (error) {
+            console.error('Failed to initialize SCORM 2004 API:', error);
+        }
+        
+        // Load content
+        if (contentPath) {
+            console.log('Loading content from:', contentPath);
+            document.getElementById('contentFrame').src = contentPath;
+        } else if (packageId) {
+            // Try to get launch URL from API
+            fetch(`/api/packages/${packageId}/launch`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log('Loading content from:', data.launchUrl);
+                        document.getElementById('contentFrame').src = data.launchUrl;
+                    }
+                })
+                .catch(err => {
+                    console.error('Failed to get launch URL:', err);
+                    document.getElementById('apiIndicator').textContent = '❌ Failed to load';
+                    document.getElementById('apiIndicator').style.background = '#ef4444';
+                });
+        } else {
+            console.error('No packageId or path specified');
+            document.getElementById('apiIndicator').textContent = '⚠️ No content specified';
+            document.getElementById('apiIndicator').style.background = '#f59e0b';
+        }
+        
+        // Debug helpers
+        window.debugAPI = () => {
+            console.log('=== SCORM API Debug Info ===');
+            console.log('window.API (SCORM 1.2):', window.API);
+            console.log('window.API_1484_11 (SCORM 2004):', window.API_1484_11);
+            
+            if (window.API) {
+                console.log('SCORM 1.2 CMI Data:', window.API.cmi);
+            }
+            
+            if (window.API_1484_11) {
+                console.log('SCORM 2004 CMI Data:', window.API_1484_11.cmi);
+            }
+        };
+        
+        console.log('=== APIs Ready ===');
+        console.log('Run debugAPI() in console to see API details');
+        console.log('Both SCORM 1.2 and 2004 APIs are available');
+    </script>
+</body>
+</html>

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Direct SCORM Test</title>
+    <meta charset="UTF-8">
+    <style>
+        body { margin: 0; padding: 20px; font-family: monospace; background: #1a1a1a; color: #0f0; }
+        #log { background: #000; padding: 15px; border-radius: 5px; height: 400px; overflow-y: auto; }
+        button { background: #0f0; color: #000; border: none; padding: 10px 20px; margin: 10px 5px 0 0; cursor: pointer; border-radius: 5px; font-weight: bold; }
+        button:hover { background: #0c0; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Direct SCORM Content Test</h1>
+    <div id="log"></div>
+    <div>
+        <button onclick="testAPI()">Test API</button>
+        <button onclick="loadContent()">Load Content</button>
+        <button onclick="location.href='/simple-player.html'">Go to Simple Player</button>
+    </div>
+    
+    <script>
+        const log = (msg) => {
+            const time = new Date().toLocaleTimeString();
+            document.getElementById('log').innerHTML += `[${time}] ${msg}<br>`;
+            console.log(msg);
+        };
+        
+        // Create simple API
+        window.API = {
+            LMSInitialize: () => { log('✅ API.LMSInitialize() called'); return "true"; },
+            LMSFinish: () => { log('✅ API.LMSFinish() called'); return "true"; },
+            LMSGetValue: (k) => { log(`📖 API.LMSGetValue(${k})`); return ""; },
+            LMSSetValue: (k, v) => { log(`📝 API.LMSSetValue(${k}, ${v})`); return "true"; },
+            LMSCommit: () => { log('💾 API.LMSCommit() called'); return "true"; },
+            LMSGetLastError: () => "0",
+            LMSGetErrorString: () => "No error",
+            LMSGetDiagnostic: () => ""
+        };
+        
+        window.API_1484_11 = {
+            Initialize: () => { log('✅ API_1484_11.Initialize() called'); return "true"; },
+            Terminate: () => { log('✅ API_1484_11.Terminate() called'); return "true"; },
+            GetValue: (k) => { log(`📖 API_1484_11.GetValue(${k})`); return ""; },
+            SetValue: (k, v) => { log(`📝 API_1484_11.SetValue(${k}, ${v})`); return "true"; },
+            Commit: () => { log('💾 API_1484_11.Commit() called'); return "true"; },
+            GetLastError: () => "0",
+            GetErrorString: () => "No error",
+            GetDiagnostic: () => ""
+        };
+        
+        log('🚀 APIs created');
+        log('window.API (SCORM 1.2) = ' + (window.API ? 'READY' : 'MISSING'));
+        log('window.API_1484_11 (SCORM 2004) = ' + (window.API_1484_11 ? 'READY' : 'MISSING'));
+        
+        function testAPI() {
+            log('\n=== Testing API ===');
+            log('Calling LMSInitialize...');
+            const result = window.API.LMSInitialize('');
+            log('Result: ' + result);
+            
+            log('Setting value...');
+            window.API.LMSSetValue('cmi.core.lesson_status', 'incomplete');
+            
+            log('Getting value...');
+            const val = window.API.LMSGetValue('cmi.core.lesson_status');
+            log('Got: ' + val);
+            
+            log('✅ API is working!');
+        }
+        
+        async function loadContent() {
+            try {
+                log('\n=== Loading Content ===');
+                const res = await fetch('/api/packages');
+                const data = await res.json();
+                
+                if (data.packages && data.packages.length > 0) {
+                    const pkg = data.packages[0];
+                    log(`Package: ${pkg.title}`);
+                    log(`Version: SCORM ${pkg.scorm_version}`);
+                    log(`ID: ${pkg.id}`);
+                    
+                    const launchRes = await fetch(`/api/packages/${pkg.id}/launch`);
+                    const launchData = await launchRes.json();
+                    
+                    log(`Launch URL: ${launchData.launchUrl}`);
+                    log('\n✅ Content is accessible!');
+                    log('\nNow opening in Simple Player...');
+                    
+                    setTimeout(() => {
+                        window.location.href = '/simple-player.html';
+                    }, 2000);
+                } else {
+                    log('❌ No packages found');
+                }
+            } catch (error) {
+                log('❌ Error: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>

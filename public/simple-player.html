@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple SCORM Player</title>
+    
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        
+        .loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #2563eb;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        
+        .loading.hidden {
+            display: none;
+        }
+        
+        .spinner {
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .status {
+            font-size: 18px;
+            margin: 10px;
+        }
+        
+        .debug {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.8);
+            color: #0f0;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            max-width: 400px;
+            max-height: 200px;
+            overflow-y: auto;
+            border-radius: 5px;
+            z-index: 10000;
+        }
+        
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <div class="status" id="status">Initializing SCORM API...</div>
+    </div>
+    
+    <div class="debug" id="debug"></div>
+    
+    <iframe id="content"></iframe>
+    
+    <!-- Load SCORM libraries from unpkg (more reliable) -->
+    <script src="https://unpkg.com/scorm-again@3/dist/scorm12.min.js" onerror="logError('Failed to load SCORM 1.2 library')"></script>
+    <script src="https://unpkg.com/scorm-again@3/dist/scorm2004.min.js" onerror="logError('Failed to load SCORM 2004 library')"></script>
+    
+    <script>
+        const debug = document.getElementById('debug');
+        const statusEl = document.getElementById('status');
+        
+        function log(msg) {
+            console.log(msg);
+            const time = new Date().toLocaleTimeString();
+            debug.innerHTML += `[${time}] ${msg}<br>`;
+            debug.scrollTop = debug.scrollHeight;
+        }
+        
+        function updateStatus(msg) {
+            statusEl.textContent = msg;
+            log(msg);
+        }
+        
+        function logError(msg) {
+            console.error(msg);
+            updateStatus('❌ ' + msg);
+        }
+        
+        // Pre-create simple APIs immediately
+        window.API = {
+            LMSInitialize: () => { log('API.LMSInitialize() called'); return "true"; },
+            LMSFinish: () => { log('API.LMSFinish() called'); return "true"; },
+            LMSGetValue: (key) => { log(`API.LMSGetValue(${key})`); return ""; },
+            LMSSetValue: (key, val) => { log(`API.LMSSetValue(${key}, ${val})`); return "true"; },
+            LMSCommit: () => { log('API.LMSCommit() called'); return "true"; },
+            LMSGetLastError: () => "0",
+            LMSGetErrorString: () => "No error",
+            LMSGetDiagnostic: () => ""
+        };
+        
+        window.API_1484_11 = {
+            Initialize: () => { log('API_1484_11.Initialize() called'); return "true"; },
+            Terminate: () => { log('API_1484_11.Terminate() called'); return "true"; },
+            GetValue: (key) => { log(`API_1484_11.GetValue(${key})`); return ""; },
+            SetValue: (key, val) => { log(`API_1484_11.SetValue(${key}, ${val})`); return "true"; },
+            Commit: () => { log('API_1484_11.Commit() called'); return "true"; },
+            GetLastError: () => "0",
+            GetErrorString: () => "No error",
+            GetDiagnostic: () => ""
+        };
+        
+        log('✅ Simple APIs created (SCORM 1.2 & 2004)');
+        
+        async function init() {
+            try {
+                updateStatus('Fetching latest package...');
+                
+                // Get packages
+                const packagesRes = await fetch('/api/packages');
+                const packagesData = await packagesRes.json();
+                
+                if (!packagesData.success || packagesData.packages.length === 0) {
+                    throw new Error('No packages found. Please upload a SCORM package first.');
+                }
+                
+                const pkg = packagesData.packages[0]; // Latest
+                log(`✅ Found package: ${pkg.title}`);
+                log(`   SCORM Version: ${pkg.scorm_version}`);
+                log(`   Package ID: ${pkg.id}`);
+                
+                updateStatus('Getting launch URL...');
+                
+                // Get launch URL
+                const launchRes = await fetch(`/api/packages/${pkg.id}/launch`);
+                const launchData = await launchRes.json();
+                
+                if (!launchData.success) {
+                    throw new Error('Failed to get launch URL');
+                }
+                
+                log(`✅ Launch URL: ${launchData.launchUrl}`);
+                
+                updateStatus('Loading SCORM content...');
+                
+                // Wait for libraries to load (if they're being used)
+                let attempts = 0;
+                while (attempts < 30 && (typeof Scorm12API === 'undefined' || typeof Scorm2004API === 'undefined')) {
+                    await new Promise(r => setTimeout(r, 100));
+                    attempts++;
+                }
+                
+                if (typeof Scorm12API !== 'undefined' && typeof Scorm2004API !== 'undefined') {
+                    log('✅ Full SCORM libraries loaded from CDN');
+                    
+                    // Create proper API
+                    const scormVersion = pkg.scorm_version.startsWith('2004') ? '2004' : '1.2';
+                    
+                    if (scormVersion === '1.2') {
+                        const api = new Scorm12API({
+                            autocommit: true,
+                            autocommitSeconds: 10,
+                            logLevel: 1
+                        });
+                        window.API = api;
+                        log('✅ Enhanced SCORM 1.2 API ready');
+                        
+                        api.on('LMSInitialize', () => log('🎯 Content called LMSInitialize()'));
+                        api.on('LMSSetValue.*', (el, val) => log(`📝 SetValue: ${el} = ${val}`));
+                        api.on('LMSCommit', () => log('💾 LMSCommit() called'));
+                    } else {
+                        const api = new Scorm2004API({
+                            autocommit: true,
+                            autocommitSeconds: 10,
+                            logLevel: 1
+                        });
+                        window.API_1484_11 = api;
+                        log('✅ Enhanced SCORM 2004 API ready');
+                        
+                        api.on('Initialize', () => log('🎯 Content called Initialize()'));
+                        api.on('SetValue.*', (el, val) => log(`📝 SetValue: ${el} = ${val}`));
+                        api.on('Commit', () => log('💾 Commit() called'));
+                    }
+                } else {
+                    log('⚠️ Using simple fallback APIs (CDN libraries not loaded)');
+                }
+                
+                // Load content
+                const iframe = document.getElementById('content');
+                
+                iframe.onload = () => {
+                    log('✅ Content loaded successfully!');
+                    document.getElementById('loading').classList.add('hidden');
+                };
+                
+                iframe.onerror = (e) => {
+                    logError('Failed to load content: ' + e);
+                };
+                
+                updateStatus('Loading content...');
+                iframe.src = launchData.launchUrl;
+                
+                // Timeout check
+                setTimeout(() => {
+                    if (!document.getElementById('loading').classList.contains('hidden')) {
+                        log('⚠️ Content is taking longer than expected...');
+                        updateStatus('Loading... (this is taking a while)');
+                    }
+                }, 5000);
+                
+            } catch (error) {
+                logError('Initialization failed: ' + error.message);
+                statusEl.innerHTML = `
+                    <div style="color: #fee;">
+                        ❌ ${error.message}<br><br>
+                        <button onclick="location.reload()" style="padding: 10px 20px; background: white; color: #2563eb; border: none; border-radius: 5px; cursor: pointer; font-size: 16px;">
+                            Reload Page
+                        </button>
+                    </div>
+                `;
+            }
+        }
+        
+        // Start when page loads
+        window.addEventListener('load', init);
+        
+        log('🚀 Simple SCORM Player initialized');
+    </script>
+</body>
+</html>

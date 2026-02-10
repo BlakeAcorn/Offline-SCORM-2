@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Offline SCORM Player">
+    <meta name="theme-color" content="#2563eb">
+    
+    <title>Offline SCORM Player</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json">
+    
+    <!-- Icons -->
+    <link rel="icon" type="image/png" href="/icon-192.png" sizes="192x192">
+    <link rel="apple-touch-icon" href="/icon-512.png">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 1200px;
+            width: 100%;
+            padding: 40px;
+        }
+        
+        h1 {
+            color: #2563eb;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+        
+        .subtitle {
+            color: #6b7280;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+        
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+        
+        .feature {
+            padding: 20px;
+            background: #f3f4f6;
+            border-radius: 10px;
+            border-left: 4px solid #2563eb;
+        }
+        
+        .feature h3 {
+            color: #1f2937;
+            margin-bottom: 10px;
+        }
+        
+        .feature p {
+            color: #6b7280;
+            line-height: 1.6;
+        }
+        
+        .actions {
+            margin-top: 40px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn-primary {
+            background: #2563eb;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #1d4ed8;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(37, 99, 235, 0.3);
+        }
+        
+        .btn-secondary {
+            background: white;
+            color: #2563eb;
+            border: 2px solid #2563eb;
+        }
+        
+        .btn-secondary:hover {
+            background: #2563eb;
+            color: white;
+        }
+        
+        .status {
+            margin-top: 30px;
+            padding: 15px;
+            background: #ecfdf5;
+            border-left: 4px solid #10b981;
+            border-radius: 5px;
+        }
+        
+        .status.offline {
+            background: #fef2f2;
+            border-left-color: #ef4444;
+        }
+        
+        .api-info {
+            margin-top: 40px;
+            padding: 20px;
+            background: #1f2937;
+            color: #f3f4f6;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        
+        .api-info h3 {
+            color: #60a5fa;
+            margin-bottom: 15px;
+        }
+        
+        .api-info code {
+            background: #374151;
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: #fbbf24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📚 Offline SCORM Player</h1>
+        <p class="subtitle">Host and play SCORM modules offline with full LMS capabilities</p>
+        
+        <div class="status" id="status">
+            <strong>✓ Server Online</strong> - Ready to accept SCORM packages
+        </div>
+        
+        <div class="features">
+            <div class="feature">
+                <h3>🎯 Full SCORM Support</h3>
+                <p>Compatible with SCORM 1.2 and SCORM 2004 packages. Parse manifests, track progress, and store learner data.</p>
+            </div>
+            
+            <div class="feature">
+                <h3>📱 Offline-First Design</h3>
+                <p>Download courses and play them without internet. Data syncs automatically when connection is restored.</p>
+            </div>
+            
+            <div class="feature">
+                <h3>🔄 Smart Synchronization</h3>
+                <p>Background sync keeps learner progress up to date across devices. Works seamlessly with PWA architecture.</p>
+            </div>
+            
+            <div class="feature">
+                <h3>🎨 PWA Ready</h3>
+                <p>Install as a Progressive Web App on any device. Works like a native app with offline support.</p>
+            </div>
+        </div>
+        
+        <div class="actions">
+            <a href="/upload.html" class="btn btn-primary">📤 Upload Package</a>
+            <a href="/offline-player.html" class="btn btn-primary">▶️ Play with Offline Support</a>
+            <a href="/simple-player.html" class="btn btn-secondary">🎮 Simple Player</a>
+            <a href="/testing-guide.html" class="btn btn-secondary">🧪 Testing Guide</a>
+        </div>
+        
+        <div class="api-info">
+            <h3>Quick Start Guide</h3>
+            <p><strong>1. Upload a SCORM Package:</strong></p>
+            <p>POST <code>/api/packages/upload</code> with form-data containing the .zip file</p>
+            <br>
+            <p><strong>2. Launch a Course:</strong></p>
+            <p>GET <code>/api/packages/:packageId/launch</code> to get the launch URL</p>
+            <br>
+            <p><strong>3. Track Progress:</strong></p>
+            <p>Use SCORM API endpoints at <code>/api/scorm/*</code> for session management</p>
+            <br>
+            <p><strong>4. Download for Offline:</strong></p>
+            <p>GET <code>/api/packages/:packageId/download</code> to get an offline bundle</p>
+        </div>
+    </div>
+    
+    <script>
+        // Service Worker Registration
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/service-worker.js')
+                .then(reg => console.log('Service Worker registered', reg))
+                .catch(err => console.error('Service Worker registration failed', err));
+        }
+        
+        // PWA Install Prompt
+        let deferredPrompt;
+        const installBtn = document.getElementById('installBtn');
+        
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            installBtn.style.display = 'inline-block';
+        });
+        
+        installBtn.addEventListener('click', async () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                console.log(`User response: ${outcome}`);
+                deferredPrompt = null;
+                installBtn.style.display = 'none';
+            }
+        });
+        
+        // Check server status
+        async function checkStatus() {
+            try {
+                const response = await fetch('/health');
+                const data = await response.json();
+                const statusEl = document.getElementById('status');
+                
+                if (data.success) {
+                    statusEl.className = 'status';
+                    statusEl.innerHTML = '<strong>✓ Server Online</strong> - Ready to accept SCORM packages';
+                } else {
+                    statusEl.className = 'status offline';
+                    statusEl.innerHTML = '<strong>✗ Server Offline</strong> - Connection lost';
+                }
+            } catch (error) {
+                const statusEl = document.getElementById('status');
+                statusEl.className = 'status offline';
+                statusEl.innerHTML = '<strong>✗ Server Offline</strong> - Running in offline mode';
+            }
+        }
+        
+        // Check status every 30 seconds
+        setInterval(checkStatus, 30000);
+        checkStatus();
+    </script>
+</body>
+</html>

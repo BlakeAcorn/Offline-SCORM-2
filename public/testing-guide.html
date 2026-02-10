@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SCORM Testing Guide</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+        
+        h1 {
+            color: #2563eb;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: #6b7280;
+            margin-bottom: 30px;
+        }
+        
+        .method {
+            background: #f9fafb;
+            border-left: 4px solid #2563eb;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+        
+        .method h2 {
+            color: #1f2937;
+            margin-bottom: 10px;
+            font-size: 1.3em;
+        }
+        
+        .method p {
+            color: #4b5563;
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background: #2563eb;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        
+        .btn:hover {
+            background: #1d4ed8;
+            transform: translateY(-2px);
+        }
+        
+        .pros-cons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin: 15px 0;
+        }
+        
+        .pros, .cons {
+            padding: 15px;
+            border-radius: 6px;
+        }
+        
+        .pros {
+            background: #ecfdf5;
+            border: 1px solid #10b981;
+        }
+        
+        .cons {
+            background: #fef2f2;
+            border: 1px solid #f87171;
+        }
+        
+        .pros h3 {
+            color: #065f46;
+            font-size: 0.9em;
+            margin-bottom: 10px;
+        }
+        
+        .cons h3 {
+            color: #991b1b;
+            font-size: 0.9em;
+            margin-bottom: 10px;
+        }
+        
+        .pros ul, .cons ul {
+            list-style: none;
+            font-size: 0.85em;
+        }
+        
+        .pros li::before {
+            content: "✓ ";
+            color: #10b981;
+            font-weight: bold;
+        }
+        
+        .cons li::before {
+            content: "✗ ";
+            color: #ef4444;
+            font-weight: bold;
+        }
+        
+        .recommended {
+            border-color: #10b981;
+            border-width: 3px;
+        }
+        
+        .recommended h2::after {
+            content: " ⭐ RECOMMENDED";
+            color: #10b981;
+            font-size: 0.6em;
+            vertical-align: super;
+        }
+        
+        code {
+            background: #1f2937;
+            color: #fbbf24;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .back-link {
+            display: inline-block;
+            color: #2563eb;
+            text-decoration: none;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+        
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-link">← Back to Home</a>
+        
+        <h1>🧪 SCORM Testing Methods</h1>
+        <p class="subtitle">Choose the best method to test your SCORM content</p>
+        
+        <div class="method recommended">
+            <h2>Method 1: Test Player (Full Featured)</h2>
+            <p>The complete test player with package selection, debug console, and full API initialization.</p>
+            
+            <div class="pros-cons">
+                <div class="pros">
+                    <h3>Pros</h3>
+                    <ul>
+                        <li>Full debug console with API call logging</li>
+                        <li>Package selector interface</li>
+                        <li>Works with all SCORM versions</li>
+                        <li>Shows real-time status</li>
+                        <li>Best for development and debugging</li>
+                    </ul>
+                </div>
+                <div class="cons">
+                    <h3>Cons</h3>
+                    <ul>
+                        <li>Requires selecting package first</li>
+                        <li>More complex interface</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <a href="/test-player.html" class="btn">▶️ Open Test Player</a>
+        </div>
+        
+        <div class="method">
+            <h2>Method 2: API Wrapper (Direct URL)</h2>
+            <p>A simple wrapper that pre-initializes the SCORM API and loads your content. Perfect for quick testing.</p>
+            
+            <div class="pros-cons">
+                <div class="pros">
+                    <h3>Pros</h3>
+                    <ul>
+                        <li>Simplest method</li>
+                        <li>Direct URL access</li>
+                        <li>Both SCORM versions ready</li>
+                        <li>Green indicator shows API is ready</li>
+                        <li>Good for quick tests</li>
+                    </ul>
+                </div>
+                <div class="cons">
+                    <h3>Cons</h3>
+                    <ul>
+                        <li>Less debugging info</li>
+                        <li>Need to know package ID</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <p><strong>Usage:</strong> <code>/api-wrapper.html?packageId=YOUR_PACKAGE_ID</code></p>
+            <a href="/upload.html" class="btn">Upload Package First</a>
+        </div>
+        
+        <div class="method">
+            <h2>Method 3: Original Player (Advanced)</h2>
+            <p>The original player with session management and backend integration. Best for production testing.</p>
+            
+            <div class="pros-cons">
+                <div class="pros">
+                    <h3>Pros</h3>
+                    <ul>
+                        <li>Full LMS integration</li>
+                        <li>Session management</li>
+                        <li>Data persistence</li>
+                        <li>Real-time CMI tracking</li>
+                        <li>Production-ready</li>
+                    </ul>
+                </div>
+                <div class="cons">
+                    <h3>Cons</h3>
+                    <ul>
+                        <li>More configuration needed</li>
+                        <li>Requires package ID in URL</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <p><strong>Usage:</strong> <code>/player.html?packageId=YOUR_PACKAGE_ID</code></p>
+            <a href="/upload.html" class="btn">Upload Package First</a>
+        </div>
+        
+        <div style="margin-top: 40px; padding: 20px; background: #eff6ff; border-radius: 8px; border-left: 4px solid #2563eb;">
+            <h3 style="color: #1e40af; margin-bottom: 10px;">💡 Quick Start</h3>
+            <ol style="color: #1e3a8a; line-height: 2;">
+                <li><a href="/upload.html" style="color: #2563eb;">Upload your SCORM package</a></li>
+                <li>Copy the Package ID from the upload confirmation</li>
+                <li>Use <a href="/test-player.html" style="color: #2563eb;">Test Player</a> to select and test your package</li>
+                <li>Check the debug console (📊 button) to see API calls</li>
+            </ol>
+        </div>
+        
+        <div style="margin-top: 30px; padding: 20px; background: #fef2f2; border-radius: 8px; border-left: 4px solid #ef4444;">
+            <h3 style="color: #991b1b; margin-bottom: 10px;">🔧 Troubleshooting</h3>
+            <p style="color: #7f1d1d; margin-bottom: 10px;"><strong>If you see "Unable to acquire LMS API":</strong></p>
+            <ul style="color: #7f1d1d; line-height: 1.8; margin-left: 20px;">
+                <li>Make sure you're using the <strong>Test Player</strong> or <strong>API Wrapper</strong></li>
+                <li>Check browser console for errors (F12)</li>
+                <li>Verify the package uploaded successfully</li>
+                <li>Try refreshing the page</li>
+                <li>Check that the API indicator shows "API Ready"</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

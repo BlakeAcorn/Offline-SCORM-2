@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SCORM Diagnostic</title>
+    
+    <!-- Load scorm-again library -->
+    <script src="https://cdn.jsdelivr.net/npm/scorm-again@latest/dist/scorm12.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/scorm-again@latest/dist/scorm2004.min.js"></script>
+    
+    <style>
+        body {
+            font-family: monospace;
+            background: #1f2937;
+            color: #f3f4f6;
+            padding: 20px;
+            line-height: 1.8;
+        }
+        
+        h1 {
+            color: #60a5fa;
+            border-bottom: 2px solid #374151;
+            padding-bottom: 10px;
+        }
+        
+        .section {
+            background: #374151;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 8px;
+            border-left: 4px solid #60a5fa;
+        }
+        
+        .success {
+            border-left-color: #10b981;
+        }
+        
+        .error {
+            border-left-color: #ef4444;
+        }
+        
+        .check {
+            margin: 10px 0;
+        }
+        
+        .check::before {
+            content: "○ ";
+            color: #6b7280;
+        }
+        
+        .check.pass::before {
+            content: "✓ ";
+            color: #10b981;
+        }
+        
+        .check.fail::before {
+            content: "✗ ";
+            color: #ef4444;
+        }
+        
+        button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        
+        button:hover {
+            background: #1d4ed8;
+        }
+        
+        pre {
+            background: #111827;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 SCORM Player Diagnostic Tool</h1>
+    
+    <div class="section">
+        <h2>System Checks</h2>
+        <div id="systemChecks"></div>
+    </div>
+    
+    <div class="section">
+        <h2>Package Information</h2>
+        <div id="packageInfo"></div>
+    </div>
+    
+    <div class="section">
+        <h2>Actions</h2>
+        <button onclick="runFullDiagnostic()">🔄 Re-run Diagnostic</button>
+        <button onclick="testAPI()">🧪 Test API</button>
+        <button onclick="clearStorage()">🗑️ Clear Storage</button>
+        <button onclick="window.location.href='/test-player.html'">▶️ Go to Test Player</button>
+    </div>
+    
+    <div class="section">
+        <h2>Console Output</h2>
+        <pre id="consoleOutput"></pre>
+    </div>
+    
+    <script>
+        const consoleOutput = document.getElementById('consoleOutput');
+        const originalConsoleLog = console.log;
+        
+        // Capture console.log
+        console.log = function(...args) {
+            originalConsoleLog.apply(console, args);
+            consoleOutput.textContent += args.join(' ') + '\n';
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        };
+        
+        async function runFullDiagnostic() {
+            console.log('=== Starting Full Diagnostic ===\n');
+            
+            // System checks
+            const systemChecks = document.getElementById('systemChecks');
+            systemChecks.innerHTML = '';
+            
+            const checks = [];
+            
+            // Check 1: Browser
+            checks.push({
+                name: 'Browser Support',
+                pass: true,
+                info: navigator.userAgent
+            });
+            
+            // Check 2: SCORM Libraries
+            const scorm12Loaded = typeof Scorm12API !== 'undefined';
+            const scorm2004Loaded = typeof Scorm2004API !== 'undefined';
+            checks.push({
+                name: 'SCORM 1.2 Library',
+                pass: scorm12Loaded,
+                info: scorm12Loaded ? 'Loaded from CDN' : 'NOT LOADED - check internet connection'
+            });
+            checks.push({
+                name: 'SCORM 2004 Library',
+                pass: scorm2004Loaded,
+                info: scorm2004Loaded ? 'Loaded from CDN' : 'NOT LOADED - check internet connection'
+            });
+            
+            // Check 3: API Endpoints
+            try {
+                const healthResponse = await fetch('/health');
+                const healthData = await healthResponse.json();
+                checks.push({
+                    name: 'Backend Server',
+                    pass: healthData.success,
+                    info: 'Server is responding'
+                });
+            } catch (error) {
+                checks.push({
+                    name: 'Backend Server',
+                    pass: false,
+                    info: 'Cannot connect to server: ' + error.message
+                });
+            }
+            
+            // Check 4: Packages API
+            try {
+                const packagesResponse = await fetch('/api/packages');
+                const packagesData = await packagesResponse.json();
+                checks.push({
+                    name: 'Packages API',
+                    pass: packagesData.success,
+                    info: `Found ${packagesData.count} package(s)`
+                });
+                
+                // Display packages
+                if (packagesData.packages && packagesData.packages.length > 0) {
+                    const packageInfo = document.getElementById('packageInfo');
+                    packageInfo.innerHTML = packagesData.packages.map(pkg => `
+                        <div style="background: #1f2937; padding: 10px; margin: 10px 0; border-radius: 5px;">
+                            <strong style="color: #60a5fa;">${pkg.title}</strong><br>
+                            ID: <code>${pkg.id}</code><br>
+                            Version: SCORM ${pkg.scorm_version}<br>
+                            Size: ${Math.round(pkg.file_size / 1024 / 1024)} MB<br>
+                            Launch: <code>${pkg.launch_path}</code><br>
+                            <button onclick="testPackage('${pkg.id}')">🧪 Test This Package</button>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                checks.push({
+                    name: 'Packages API',
+                    pass: false,
+                    info: 'Error: ' + error.message
+                });
+            }
+            
+            // Check 5: Window APIs
+            checks.push({
+                name: 'window.API (SCORM 1.2)',
+                pass: typeof window.API !== 'undefined',
+                info: typeof window.API !== 'undefined' ? 'Available' : 'Not yet initialized'
+            });
+            checks.push({
+                name: 'window.API_1484_11 (SCORM 2004)',
+                pass: typeof window.API_1484_11 !== 'undefined',
+                info: typeof window.API_1484_11 !== 'undefined' ? 'Available' : 'Not yet initialized'
+            });
+            
+            // Check 6: Storage
+            try {
+                localStorage.setItem('test', 'test');
+                localStorage.removeItem('test');
+                checks.push({
+                    name: 'LocalStorage',
+                    pass: true,
+                    info: 'Working'
+                });
+            } catch (error) {
+                checks.push({
+                    name: 'LocalStorage',
+                    pass: false,
+                    info: 'Not available: ' + error.message
+                });
+            }
+            
+            // Display checks
+            systemChecks.innerHTML = checks.map(check => `
+                <div class="check ${check.pass ? 'pass' : 'fail'}">
+                    <strong>${check.name}:</strong> ${check.info}
+                </div>
+            `).join('');
+            
+            console.log('\n=== Diagnostic Complete ===');
+            console.log(`Passed: ${checks.filter(c => c.pass).length}/${checks.length}`);
+            console.log(`Failed: ${checks.filter(c => !c.pass).length}/${checks.length}`);
+        }
+        
+        async function testPackage(packageId) {
+            console.log('\n=== Testing Package: ' + packageId + ' ===');
+            
+            try {
+                // Get launch URL
+                const response = await fetch(`/api/packages/${packageId}/launch`);
+                const data = await response.json();
+                
+                console.log('✓ Package found');
+                console.log('Launch URL:', data.launchUrl);
+                console.log('SCORM Version:', data.scormVersion);
+                
+                // Try to access the launch URL
+                const contentResponse = await fetch(data.launchUrl);
+                if (contentResponse.ok) {
+                    console.log('✓ Content is accessible');
+                    console.log('\nYou can now test this package in the Test Player');
+                    console.log('URL: /test-player.html');
+                } else {
+                    console.log('✗ Content returned status:', contentResponse.status);
+                }
+            } catch (error) {
+                console.log('✗ Error testing package:', error.message);
+            }
+        }
+        
+        async function testAPI() {
+            console.log('\n=== Testing SCORM API ===');
+            
+            if (typeof Scorm12API === 'undefined') {
+                console.log('✗ Scorm12API not loaded');
+                return;
+            }
+            
+            try {
+                const api = new Scorm12API({
+                    autocommit: false,
+                    logLevel: 1
+                });
+                
+                console.log('✓ SCORM 1.2 API created');
+                
+                const initResult = api.LMSInitialize('');
+                console.log('Initialize result:', initResult);
+                
+                const setResult = api.LMSSetValue('cmi.core.lesson_status', 'incomplete');
+                console.log('SetValue result:', setResult);
+                
+                const getResult = api.LMSGetValue('cmi.core.lesson_status');
+                console.log('GetValue result:', getResult);
+                
+                console.log('✓ SCORM API is functional');
+            } catch (error) {
+                console.log('✗ API test failed:', error.message);
+            }
+        }
+        
+        function clearStorage() {
+            if (confirm('Clear all local storage? This will reset all SCORM data.')) {
+                localStorage.clear();
+                console.log('✓ LocalStorage cleared');
+                console.log('Please refresh the page');
+            }
+        }
+        
+        // Run on load
+        window.addEventListener('load', runFullDiagnostic);
+    </script>
+</body>
+</html>
